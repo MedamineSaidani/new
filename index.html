@@ -1,0 +1,198 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Salary Planner</title>
+<style>
+  :root { --bg:#f4f6f9; --card:#fff; --text:#1d2433; --muted:#6b7385; --line:#e3e7ee; --accent:#2f6fed; --good:#16a34a; --bad:#dc2626; --head:#eef1f6; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#12151c; --card:#1c212c; --text:#e8ebf2; --muted:#98a1b3; --line:#2b3242; --accent:#6c9bff; --good:#4ade80; --bad:#f87171; --head:#232a38; }
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; padding:24px 16px; background:var(--bg); color:var(--text); font:15px/1.4 system-ui,Segoe UI,Arial,sans-serif; }
+  .wrap { max-width:1150px; margin:0 auto; }
+  h1 { font-size:1.5rem; margin:0 0 4px; }
+  .hint { color:var(--muted); margin:0 0 16px; font-size:.9rem; }
+  .cards { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:12px; margin-bottom:16px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:12px 14px; }
+  .card .k { color:var(--muted); font-size:.75rem; text-transform:uppercase; letter-spacing:.05em; }
+  .card .v { font-size:1.3rem; font-weight:700; margin-top:2px; }
+  .chartcard { margin-bottom:16px; }
+  .chartcard svg { display:block; margin-top:8px; }
+  .chartcard text { fill:var(--muted); font-size:11px; }
+  .legend { display:flex; flex-wrap:wrap; gap:6px 16px; margin-top:8px; font-size:.8rem; color:var(--muted); }
+  .legend i { display:inline-block; width:10px; height:10px; border-radius:2px; margin-right:5px; }
+  .tablewrap { overflow-x:auto; background:var(--card); border:1px solid var(--line); border-radius:12px; }
+  table { border-collapse:collapse; width:100%; min-width:960px; }
+  th, td { padding:6px 6px; border-bottom:1px solid var(--line); text-align:right; white-space:nowrap; }
+  th { background:var(--head); font-size:.72rem; text-transform:uppercase; letter-spacing:.04em; color:var(--muted); position:sticky; top:0; }
+  th:first-child, td:first-child { text-align:left; padding-left:12px; font-weight:600; position:sticky; left:0; background:var(--card); }
+  th:first-child { background:var(--head); }
+  th:last-child, td:last-child { position:sticky; right:0; background:var(--card); box-shadow:-6px 0 8px -6px rgba(0,0,0,.25); min-width:96px; }
+  th:last-child, tfoot td:last-child { background:var(--head); }
+  tr:last-child td { border-bottom:0; }
+  @media (max-width:700px) {
+    body { padding:16px 10px; }
+    td .sub { display:none; }
+    td input { width:72px; }
+    td input.pct { width:52px; }
+  }
+  input { width:86px; padding:6px 7px; font:inherit; color:var(--text); background:var(--bg); border:1px solid var(--line); border-radius:6px; text-align:right; }
+  input.pct { width:60px; }
+  input:focus { outline:2px solid var(--accent); border-color:transparent; }
+  .sub { display:block; color:var(--muted); font-size:.72rem; }
+  .rest { font-weight:700; padding-right:12px; }
+  tfoot td { font-weight:700; background:var(--head); border-top:2px solid var(--line); }
+  tfoot td:first-child { background:var(--head); }
+  .good { color:var(--good); } .bad { color:var(--bad); }
+  .actions { margin-top:14px; display:flex; gap:10px; flex-wrap:wrap; }
+  button { font:inherit; background:var(--card); border:1px solid var(--line); color:var(--text); border-radius:8px; padding:7px 12px; cursor:pointer; }
+  button:hover { border-color:var(--accent); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Salary Planner — 12 months</h1>
+  <p class="hint">Fill in each month. Investment and emergency are % of that month's salary. Rest = salary − investment − emergency − bills.</p>
+
+  <div class="cards">
+    <div class="card"><div class="k">Year salary</div><div class="v" id="cSalary">0</div></div>
+    <div class="card"><div class="k">Invested</div><div class="v" id="cInv">0</div></div>
+    <div class="card"><div class="k">Emergency fund</div><div class="v" id="cEmg">0</div></div>
+    <div class="card"><div class="k">Bills &amp; expenses</div><div class="v" id="cBills">0</div></div>
+    <div class="card"><div class="k">Rest for the year</div><div class="v" id="cRest">0</div></div>
+  </div>
+
+  <div class="card chartcard">
+    <div class="k">Where each month's salary goes</div>
+    <svg id="chart" viewBox="0 0 800 280" width="100%" role="img" aria-label="Yearly stacked bar chart by month"></svg>
+    <div class="legend" id="legend"></div>
+  </div>
+
+  <div class="tablewrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Month</th><th>Salary</th><th>Invest %</th><th>Emerg. %</th>
+          <th>Water</th><th>Electricity</th><th>House</th><th>Food</th><th>Car</th><th>Personal</th><th>Other</th><th>Rest</th>
+        </tr>
+      </thead>
+      <tbody id="body"></tbody>
+      <tfoot>
+        <tr id="foot"></tr>
+      </tfoot>
+    </table>
+  </div>
+
+  <div class="actions">
+    <button id="copy">Copy January to all months</button>
+    <button id="reset">Clear all</button>
+  </div>
+</div>
+
+<script>
+const months = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+const fields = ['salary','inv','emg','water','elec','house','food','car','personal','other'];
+const billFields = ['water','elec','house','food','car','personal','other'];
+const pctFields = ['inv','emg'];
+const $ = id => document.getElementById(id);
+const fmt = n => n.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2});
+const KEY = 'salaryPlanner12';
+
+const inputs = months.map(() => ({}));
+const restCells = [];
+
+function build() {
+  const body = $('body');
+  months.forEach((m, i) => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td>${m}</td>` + fields.map(f =>
+      `<td><input data-m="${i}" data-f="${f}" type="number" min="0" ${pctFields.includes(f) ? 'max="100" class="pct"' : ''} step="any" inputmode="decimal"></td>`
+    ).join('') + `<td class="rest"></td>`;
+    body.appendChild(tr);
+    tr.querySelectorAll('input').forEach(inp => { inputs[i][inp.dataset.f] = inp; inp.addEventListener('input', calc); });
+    restCells.push(tr.querySelector('.rest'));
+  });
+}
+
+const val = (i, f) => Math.max(0, parseFloat(inputs[i][f].value) || 0);
+
+function calc() {
+  const t = {salary:0, inv:0, emg:0, bills:0, rest:0, water:0, elec:0, house:0, food:0, car:0, personal:0, other:0};
+  const series = [];
+  months.forEach((_, i) => {
+    const s = val(i, 'salary');
+    const inv = s * val(i, 'inv') / 100;
+    const emg = s * val(i, 'emg') / 100;
+    const bills = billFields.reduce((a, f) => a + val(i, f), 0);
+    const rest = s - inv - emg - bills;
+    const used = s || bills;
+    restCells[i].innerHTML = used ? `<span class="${rest < 0 ? 'bad' : 'good'}">${fmt(rest)}</span><span class="sub">inv ${fmt(inv)} · emg ${fmt(emg)}</span>` : '';
+    series.push({salary:s, inv, emg, bills, rest});
+    t.salary += s; t.inv += inv; t.emg += emg; t.bills += bills; t.rest += rest;
+    billFields.forEach(f => t[f] += val(i, f));
+  });
+  $('cSalary').textContent = fmt(t.salary);
+  $('cInv').textContent = fmt(t.inv);
+  $('cEmg').textContent = fmt(t.emg);
+  $('cBills').textContent = fmt(t.bills);
+  $('cRest').textContent = fmt(t.rest);
+  $('cRest').className = 'v ' + (t.rest < 0 ? 'bad' : 'good');
+  $('foot').innerHTML = `<td>Total</td><td>${fmt(t.salary)}</td><td>${fmt(t.inv)}</td><td>${fmt(t.emg)}</td>` +
+    billFields.map(f => `<td>${fmt(t[f])}</td>`).join('') +
+    `<td class="rest ${t.rest < 0 ? 'bad' : 'good'}">${fmt(t.rest)}</td>`;
+  drawChart(series);
+  save();
+}
+
+const COLORS = [['Investment','#2f6fed'], ['Emergency fund','#f59e0b'], ['Bills & expenses','#8b5cf6'], ['Rest','#16a34a']];
+$('legend').innerHTML = COLORS.map(c => `<span><i style="background:${c[1]}"></i>${c[0]}</span>`).join('') +
+  '<span><i style="background:none;border-top:2px dashed #888;height:0;vertical-align:middle"></i>Salary</span>';
+
+function drawChart(series) {
+  const W = 800, H = 280, L = 56, R = 10, T = 12, B = 28;
+  const pw = W - L - R, ph = H - T - B;
+  const max = Math.max(1, ...series.map(s => Math.max(s.salary, s.inv + s.emg + s.bills + Math.max(s.rest, 0))));
+  const step = Math.pow(10, Math.floor(Math.log10(max)));
+  const nice = Math.ceil(max / step * 1.05 / (step >= 1 ? 1 : 1)) * step;
+  const top = Math.max(nice, max);
+  const y = v => T + ph - v / top * ph;
+  const bw = pw / 12;
+  let g = '';
+  for (let k = 0; k <= 4; k++) {
+    const v = top * k / 4, yy = y(v);
+    g += `<line x1="${L}" x2="${W - R}" y1="${yy}" y2="${yy}" stroke="var(--line)"/><text x="${L - 6}" y="${yy + 4}" text-anchor="end">${Math.round(v).toLocaleString()}</text>`;
+  }
+  series.forEach((s, i) => {
+    const x = L + i * bw + bw * 0.2, w = bw * 0.6;
+    let acc = 0;
+    [s.inv, s.emg, s.bills, Math.max(s.rest, 0)].forEach((v, j) => {
+      if (v <= 0) return;
+      g += `<rect x="${x}" y="${y(acc + v)}" width="${w}" height="${y(acc) - y(acc + v)}" fill="${COLORS[j][1]}"><title>${months[i]} · ${COLORS[j][0]}: ${fmt(v)}</title></rect>`;
+      acc += v;
+    });
+    if (s.salary > 0) g += `<line x1="${x - 3}" x2="${x + w + 3}" y1="${y(s.salary)}" y2="${y(s.salary)}" stroke="var(--text)" stroke-width="2" stroke-dasharray="4 3"><title>${months[i]} · Salary: ${fmt(s.salary)}</title></line>`;
+    g += `<text x="${x + w / 2}" y="${H - 10}" text-anchor="middle">${months[i].slice(0, 3)}</text>`;
+  });
+  $('chart').innerHTML = g;
+}
+
+function save() {
+  try { localStorage.setItem(KEY, JSON.stringify(inputs.map(r => Object.fromEntries(fields.map(f => [f, r[f].value]))))); } catch (e) {}
+}
+function load() {
+  try {
+    const d = JSON.parse(localStorage.getItem(KEY) || '[]');
+    d.forEach((r, i) => fields.forEach(f => { if (inputs[i] && r && r[f] !== undefined) inputs[i][f].value = r[f]; }));
+  } catch (e) {}
+}
+
+build();
+load();
+$('copy').onclick = () => { for (let i = 1; i < 12; i++) fields.forEach(f => inputs[i][f].value = inputs[0][f].value); calc(); };
+$('reset').onclick = () => { if (confirm('Clear all 12 months?')) { inputs.forEach(r => fields.forEach(f => r[f].value = '')); calc(); } };
+calc();
+</script>
+</body>
+</html>
